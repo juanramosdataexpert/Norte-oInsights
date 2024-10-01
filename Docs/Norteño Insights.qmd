@@ -1,0 +1,1511 @@
+---
+format: 
+  pdf:
+    documentclass: article
+    geometry: 
+      - top=25mm
+      - left=45mm
+      - right=22mm
+      - bottom=25mm
+      - heightrounded
+      - twoside
+      - asymmetric
+    papersize: letter
+fontsize: 15pt
+mainfont: Georgia
+jupyter: python3
+header-includes:
+  - \usepackage{sectsty}
+  - \usepackage{xcolor}
+  - \usepackage{setspace}
+  - \sectionfont{\fontsize{39}{50}\selectfont\color[HTML]{231f20}}
+  - \usepackage{fontspec}
+  - \setmainfont{Georgia}
+  - \usepackage{multicol}
+  - \setlength{\columnsep}{5mm}
+  - \usepackage[none]{hyphenat}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \fancyfoot[LE]{\thepage \qquad \qquad \textbf{\fontsize{7}{10}\selectfont Norteño Insights}}
+  - \fancyfoot[RO]{\textbf{\fontsize{7}{10}\selectfont Norteño Insights} \qquad \qquad \thepage}
+  - \renewcommand{\headrulewidth}{0pt}
+  - \renewcommand{\footrulewidth}{0pt}
+  - \raggedright
+  - \usepackage{graphicx}
+  - \usepackage{enumitem}
+engine: xelatex
+---
+
+\begin{figure}[!ht]
+    \vspace*{-75pt}
+    \hspace*{-132pt}
+    \includegraphics[width=1.02\paperwidth]{../Src/Img/Norte.jpg}
+\end{figure}
+
+\begin{flushright}
+\textcolor[HTML]{716d6b}{\fontsize{8}{10}\selectfont \textit{Zac Jerez / Enconecte Jerez}}
+\end{flushright}
+
+# Norteño Insights
+
+\vspace{10pt}
+\begin{spacing}{1.5}
+\textcolor[HTML]{716d6b}{\fontsize{17}{100}\selectfont Análisis de datos de la música norteña colombiana. Descubriendo tendencias, patrones y oportunidades en la industria musical a través de técnicas de análisis de datos.}
+\end{spacing}
+
+\vspace{8pt}
+\textcolor[HTML]{716d6b}{\fontsize{12}{25}\selectfont \textit{Por Juan Ramos}}
+
+<!-- Reporte -->
+\newpage
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Se descargaron los datos estructurados a partir de las últimas 20 publicaciones en Instagram de cada uno de los grupos más representativos del Género Norteño Colombiano que son: Grupo Dominio, Uriel Henao, Los Hermanos Ariza Show y Los 5 del Norte. \\
+\vspace{5mm}
+El código completo del análisis se encuentra en GitHub en el siguiente \href{https://github.com/juanramosdataexpert/NortenoInsights}{repositorio}. \\
+\vspace{5mm}
+Una vez se descargó la información mediante la librería InstagrAPI de Python se dividieron en dos archivos de acuerdo con el desempeño de la publicación. El primer archivo se llama Norteno.csv y son las publicaciones con desempeño normal, mientras el archivo Outliers.csv contiene las publicaciones con un desempeño atípico estadísticamente. \\
+\vspace{5mm}
+Además, se generaron 2 archivos .csv adicionales que utilizaremos de referencia, llamados Popular.csv con 4 artistas representativos de la Música Popular Colombiana que son Luis Alfonso, Pipe Bueno, Jessi Uribe y Yeison Jiménez. Por su parte, en el archivo Mexico.csv, encontramos las últimas 20 publicaciones de 4 artistas representativos de la Música Norteña Mexicana que son Los Tigres del Norte, Grupo Intocable, Los Tucanes de Tijuana y Bobby Pulido. \\
+\vspace{5mm}
+De estas publicaciones de referencia, también fueron aisladas las publicaciones con desempeños atípicos. \\
+\vspace{5mm}
+Cada archivo Comma-Separated Values tiene las mismas 11 columnas que son:
+\begin{itemize}[noitemsep]
+  \item Artista: Nombre del Artista dueño de la cuenta de Instagram
+  \item Seguidores: Cantidad de seguidores de la cuenta
+  \item Tipo: Tipo de publicación
+  \item Fecha y Hora: Fecha y Hora de publicación en zona de tiempo America/Bogotá en el caso de los artistas colombianos y America/Mexico en el caso de los artistas mexicanos.
+  \item KPI: Un indicador de desempeño que creamos que surge de dividir el número de likes de la publicación entre el número de seguidores del artista.
+  \item Likes: Número de likes de la publicación
+  \item Comentarios: Número de comentarios de la publicación
+  \item Caption: Descripción de la publicación
+  \item Palabras en Caption: Cantidad de palabras en la descripción de la publicación
+  \item Número de hashtags: Cantidad de hashtags en la descripción de la publicación.
+  \item Hashtags: Lista de hashtags de la publicación
+\end{itemize}
+De esta forma, como podemos ver a continuación en la Gráfica 1, el Grupo Dominio y Los Hermanos Ariza Show tienen menos publicaciones a analizar en el archivo principal, ya que tienen publicaciones
+en el archivo de Outliers.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+
+# Importar librerías de manipulación de dataframes
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+# Importar librerías de análisis
+from collections import Counter
+from datetime import datetime
+
+# Importar librería de visualización
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+import warnings
+warnings.filterwarnings("ignore")
+
+# Importar mi paleta de colores
+juan_colors = ['#101B4B', '#545E85', '#A3A8B2',
+               '#E7E7E7', '#0F19C9', '#F6D673']
+
+# Crear la paleta de colores personalizada
+colors = [juan_colors[5], juan_colors[0]]
+juan_cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+
+# Configurar la fuente de los gráficos
+plt.rc('font', family='Georgia', size=12)
+
+# Importar archivos csv
+norteno = pd.read_csv('../Data/Norteno.csv')
+popular = pd.read_csv('../Data/Popular.csv')
+mexico = pd.read_csv('../Data/Mexico.csv')
+viral = pd.read_csv('../Data/Outliers.csv')
+
+# Arreglar el formato de fecha de los dataframes
+norteno['Fecha y Hora'] = pd.to_datetime(norteno['Fecha y Hora'])
+popular['Fecha y Hora'] = pd.to_datetime(popular['Fecha y Hora'])
+mexico['Fecha y Hora'] = pd.to_datetime(mexico['Fecha y Hora'])
+viral['Fecha y Hora'] = pd.to_datetime(viral['Fecha y Hora'])
+
+# Eliminar la publicación sin caption
+mexico = mexico[~mexico['Caption'].isna()]
+
+# Encontrar la cantidad de registros por artista
+rows_by_artist = norteno['Artista'].value_counts() \
+    .sort_values()
+
+# Graficar la cantidad de registros por artista
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-5.5, y=5.06,
+         s='Gráfica 1')
+plt.title('Los 5 del Norte y Uriel Henao tienen la mayor cantidad de publicaciones',
+          weight='bold', size=22,
+          x=0.342, y=1.2, color=juan_colors[0])
+plt.suptitle('Cantidad de publicaciones analizadas por artista',
+             x=0.10, y=1)
+plt.barh(y=rows_by_artist.index,
+         width=rows_by_artist,
+         color=juan_colors[0],
+         zorder=2)
+ax.set_yticklabels(rows_by_artist.index,
+                   ha='left',
+                   x=-.22)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'bottom', 'right']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Análisis Univariable} \\
+Decidimos dividir nuestro conjunto de datos de esta forma, porque queríamos analizar la estructura base de la estrategia en redes sociales de los artistas del género, pero sin dejar de lado las publicaciones virales. \\
+\vspace{5mm}
+Como me observa en la gráfica 2, tenemos la cantidad de seguidores actuales de cada uno de los perfiles analizados.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Crear listado de seguidores por artista
+followers = norteno.groupby('Artista')['Seguidores'].max().sort_values()
+
+# Graficar la cantidad de seguidores por artista
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-19000, y=5.6,
+         s='Gráfica 2')
+plt.title('Grupo Dominio es el artista con mayor cantidad de seguidores de música \nnorteña en Colombia',
+          weight='bold', size=22, ha='left',
+          x=-0.26, y=1.2, color=juan_colors[0])
+plt.suptitle('Cantidad de seguidores por artista',
+             x=0.05, y=1)
+plt.barh(y=followers.index,
+         width=followers,
+         color=juan_colors[0],
+         zorder=2)
+ax.set_yticklabels(followers.index,
+                   ha='left',
+                   x=-.22)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'bottom', 'right']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Cada perfil tiene su propia estrategia de contenido, pero, como se ve en la gráfica 3, en general, el principal tipo de contenido son los Reels, seguido de los Carruseles.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Contar tipo de contenido por artista
+type_of_content = norteno.pivot_table(index='Artista',
+                                      columns='Tipo',
+                                      values='Fecha y Hora',
+                                      aggfunc='count',
+                                      fill_value=0)
+
+# Normalizar los datos para que sumen 100 por cada artista
+type_of_content = type_of_content.div(
+    type_of_content.sum(axis=1), axis=0) * 100
+# Crear el gráfico de barras apiladas
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-25, y=4.9,
+         s='Gráfica 3')
+plt.title('El tipo de contenido principal son los Reels',
+          weight='bold', size=17,
+          x=0.04, y=1.20, color=juan_colors[0])
+plt.suptitle('Porcentaje de tipo de contenido por artista',
+             x=0.095, y=1)
+type_of_content.plot(kind='barh', stacked=True,
+                     ax=ax, color=[juan_colors[4],
+                                   juan_colors[2],
+                                   juan_colors[0]])
+ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+ax.set_ylabel('')
+ax.set_xticks([])
+
+for i in range(type_of_content.shape[0]):
+    cumulative_sum = 0
+    for j, tipo in enumerate(type_of_content.columns):
+        value = type_of_content.iloc[i, j]
+        if value > 5:
+            ax.text(x=cumulative_sum + value / 2, y=i,
+                    s=f'{value:.1f}%', ha='center', va='center',
+                    color='white', fontsize=10)
+        cumulative_sum += value
+
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Aunque se tomaron en cuenta únicamente las últimas 20 publicaciones de cada cuenta, no hay
+publicaciones más antiguas al 15 de mayo de 2024. También es importante mencionar que la mayoría se publicaron en el último mes desde el 15 de agosto de 2024 hasta el 15 de septiembre de 2024
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de fechas
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=datetime(2024, 5, 8), y=23.9,
+         s='Gráfica 4')
+plt.title('La mayor cantidad de publicaciones se hicieron en el \núltimo mes',
+          weight='bold', size=22, ha='left',
+          x=-0.025, y=1.16, color=juan_colors[0])
+plt.suptitle('Fechas de publicación analizadas',
+             x=0.23, y=0.97)
+plt.hist(norteno['Fecha y Hora'],
+         color=juan_colors[0],
+         zorder=2)
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'left', 'right']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Decidimos crear nuestro propio KPI que se basa en el número de likes por publicación y el número de seguidores de la cuenta. No se tuvo en cuenta el número de comentarios pues, como más adelante se verá, los comentarios por publicación son muy bajos, el público no acostumbra a comentar. \\
+\vspace{5mm}
+Entonces nuestro KPI queda definido como la cantidad de likes que tiene la publicación dividido entre el número de seguidores de la cuenta. De esta forma, encontramos, como se ve en la gráfica 5, que su mediana se encuentra en 0.004974.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de KPIs
+fig, ax = plt.subplots(figsize=[12, 2])
+plt.text(x=-0.0003, y=1.92,
+         s='Gráfica 5')
+plt.title('La mediana de nuestro KPI es de 0.004974',
+          weight='bold', size=22,
+          x=0.39, y=1.16, color=juan_colors[0])
+plt.suptitle('Distribución de nuestro KPI: likes / seguidores',
+             ha='left', x=0.15, y=0.97)
+plt.boxplot(norteno['KPI'], vert=False,
+            patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.set_yticks([])
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+De nuestro KPI podemos también mencionar que el valor menor es 0.000043, la media es de 0.005361, con una desviación estándar de 0.004173 y un valor
+máximo de 0.01974. \\
+\vspace{5mm}
+Esto nos lleva, a que una publicación con un desempeño promedio de Los Hermanos Ariza Show
+debe tener una mediana de 114.89 likes; de Uriel Henao una mediana de 250.67 likes; de Grupo Dominio una mediana de 348.66 likes; y de Los 5 del Norte una mediana de 79.58 likes. \\
+\vspace{5mm}
+En la gráfica 6 podemos observar la distribución del número de likes de las publicaciones. La publicación con menor número de likes tuvo 3, la que más likes obtuvo fue una con 674. \\
+\vspace{5mm}
+El número de likes de las publicaciones tiene una media de 221.31 y una desviación estándar de 191.89. Una desviación altísima, por lo que no podríamos hacer una comparación directa debido a la variedad de perfiles.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de fechas
+fig, ax = plt.subplots(figsize=[12, 2])
+plt.text(x=-0.0003, y=1.95,
+         ha='left',
+         s='Gráfica 6')
+plt.title('La mediana de likes es 195.5',
+          weight='bold', size=22,
+          x=0.037, y=1.16, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución de likes de las publicaciones',
+             ha='left', x=0.155, y=0.97)
+plt.boxplot(norteno['Likes'], vert=False,
+            patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.set_yticks([])
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 7 encontramos la distribución de los comentarios por publicación. Tenemos un intervalo intercuartílico de 2 a 8 comentarios, aunque también tenemos publicaciones con hasta 42 comentarios, hay publicaciones también con 0 comentarios. \\
+\vspace{5mm}
+Esto resulta en una distribución promedio de 6.13 comentarios y una desviación estándar de 7.22. De esto podemos concluir fácilmente que aunque hay casos atípicos donde hay más de 17 comentarios, la mediana es 4, el público en ninguna de las cuentas acostumbra a dejar comentarios.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de fechas
+fig, ax = plt.subplots(figsize=[12, 2])
+plt.text(x=-0.4, y=1.95,
+         ha='left',
+         s='Gráfica 7')
+plt.title('La mediana de comentarios es 4',
+          weight='bold', size=22,
+          x=0.037, y=1.15, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución de comentarios de las publicaciones',
+             ha='left', x=0.155, y=0.97)
+plt.boxplot(norteno['Comentarios'], vert=False,
+            patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.set_yticks([])
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 8 encontramos la distribución de la cantidad de palabras en la descripción de las publicaciones. Allí encontramos una media de 30.27 palabras y una desviación estándar de 16.34. El post con menor cantidad de palabras fue 11, el que más palabras tuvo fue 79. \\
+\vspace{5mm}
+Sin embargo, el valor principal es que la mediana de la cantidad de palabras por publicación es 26.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de fechas
+fig, ax = plt.subplots(figsize=[12, 2])
+plt.text(x=10.3, y=1.95,
+         ha='left',
+         s='Gráfica 8')
+plt.title('La mediana de cantidad de palabras por post es 26',
+          weight='bold', size=22,
+          x=0.037, y=1.15, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución de cantidad de palabras en el caption de las publicaciones',
+             ha='left', x=0.153, y=0.97)
+plt.boxplot(norteno['Palabras en Caption'], vert=False,
+            patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.set_yticks([])
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+De la cantidad de hashtags por publicación, tenemos un número mínimo de 0 y máximo de 26. \\
+\vspace{5mm}
+Tenemos una mediana de 4, con un promedio en 4.05 y una desviación estándar de 3.67.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar la distribución de fechas
+fig, ax = plt.subplots(figsize=[12, 2])
+plt.text(x=-0.3, y=1.95,
+         ha='left',
+         s='Gráfica 9')
+plt.title('La mediana de cantidad de hashtags por post es 4',
+          weight='bold', size=22,
+          x=0.037, y=1.16, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución de cantidad de hashtags de las publicaciones',
+             ha='left', x=0.155, y=0.97)
+plt.boxplot(norteno['Número de hashtags'], vert=False,
+            patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.set_yticks([])
+ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+De todos estos hashtags, encontramos que \#MusicaNorteña y \#Dominio fueron usados en 21 y
+18 publicaciones respectivamente. Además encontramos hashtags de marcas entre los más
+usados como \#Dominio, \#Los5DelNorte, \#UrielHenao, \#HermanosArizaShow y \#ElReyDeLosCorridosProhibidos. \\
+\vspace{5mm}
+Siendo entonces \#MusicaNorteña, \#Show, \#Norteño y \#Viral los hashtags no específicos más
+importantes.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Limpiar los strings y convertirlos a listas
+norteno['Hashtags'] = norteno['Hashtags'].apply(
+    lambda x: x.strip("[]").replace("'", "").split(", "))
+hashtags_list = [hashtag for sublist in norteno['Hashtags']
+                 for hashtag in sublist]
+hashtags_list = [hashtag for hashtag in hashtags_list if hashtag]
+
+# Contar la frecuencia de cada hashtag
+hashtag_counts = Counter(hashtags_list)
+top_hashtags = hashtag_counts.most_common(10)
+hashtags, counts = zip(*top_hashtags)
+
+# Crear el gráfico de barras
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-7, y=14,
+         ha='left',
+         s='Gráfica 10')
+plt.title('El hashtag #MusicaNorteña y #Dominio son los más utilizados',
+          weight='bold', size=22,
+          x=-0.32, y=1.2, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Los 10 Hashtags más utilizados',
+             ha='left', x=-0.122, y=1)
+bars = ax.barh(hashtags, counts,
+               color=juan_colors[0],
+               zorder=2)
+for bar in bars:
+    width = bar.get_width()
+    ax.text(width + 0.25,
+            bar.get_y() + bar.get_height() / 2,
+            f'{int(width)}',
+            va='center',
+            ha='center',
+            fontsize=10)
+ax.set_yticklabels(hashtags, ha='left',
+                   x=-0.25)
+plt.grid(axis='x', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'bottom', 'right']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Análisis Multivariable} \\
+A continuación, hablaremos acerca de la relación existente entre las diferentes columnas. \\
+\vspace{5mm}
+En la gráfica 11 encontramos el mapa de calor de la matriz de correlación de las diferentes columnas numéricas de nuestra base de datos. Aquí se puede ver, con un valor de 0.5483, que la correlación más fuerte está entre el número de seguidores y likes. Esta relación nos quiere decir que a medida que los perfiles tienen mayor número de seguidores, posiblemente hay mayor alcance y, así mismo, mayor interacción del público que se ve reflejada en el número de likes. Por tanto, el número de seguidores es importante para Instagram y el número de likes que obtendrá cada publicación.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Hacer primero una matriz de correlación
+correlation_matrix = norteno.corr(numeric_only=True)
+
+# Graficar la matriz de correlación
+fig, ax = plt.subplots(figsize=(12, 6))
+plt.text(x=-2.45, y=-2.6,
+         s='Gráfica 11')
+plt.title('La correlación más fuerte está entre \nSeguidores y Likes',
+          weight='bold', size=22, ha='left',
+          x=-0.32, y=1.16, color=juan_colors[0])
+plt.suptitle('Matriz de correlación de columnas numéricas',
+             x=0.405, y=0.97)
+cax = ax.imshow(correlation_matrix, cmap=juan_cmap,
+                vmin=-1, vmax=1)
+cbar = fig.colorbar(cax, ax=ax)
+ax.set_xticks(np.arange(len(correlation_matrix.columns)))
+ax.set_yticks(np.arange(len(correlation_matrix.columns)))
+ax.set_xticklabels(correlation_matrix.columns, rotation=15,
+                   fontsize=8)
+ax.set_yticklabels(correlation_matrix.columns,
+                   fontsize=8, ha='left', x=-0.25)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Otras relaciones importantes que son importantes mencionar son:
+\begin{itemize}[noitemsep]
+  \item \textbf{Cantidad de palabras del caption y número de hashtags -0.28:} Es una relación negativa y débil, por lo que no sería correcto decir que a mayor cantidad de palabras, menor número de hashtags, la relación es débil.
+  \item \textbf{Número de likes y número de comentarios - 0.37:} Aunque tenemos una relación positiva, es igualmente muy débil y ahora sabemos que es resultado de la falta de comentarios en el público.
+\end{itemize}
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Agrupar los 'Likes' por 'Artista'
+artistas = norteno['Artista'].unique()
+likes_por_artista = [norteno[norteno['Artista']
+                             == artista]['KPI'] for artista in artistas]
+
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=0.1, y=0.03, s='Gráfica 12')
+plt.title('Los Hermanos Ariza Show es la cuenta con mayor promedio \nde KPI por publicación',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Distribución de KPI por Artista',
+    ha='left', x=0.047, y=0.97)
+plt.boxplot(likes_por_artista, labels=artistas,
+            notch=True, patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.xticks(rotation=0)
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 12 encontramos la distribución de nuestro KPI por cada uno de los perfiles analizados. \\
+\vspace{5mm}
+Es evidente que los números más altos de nuestro KPI los tiene el perfil de Los Hermanos Ariza Show. \\
+\vspace{5mm}
+Vemos también que la cuenta de Uriel Henao tiene unos valores altos, pero será importante desarrollar una prueba estadística que nos determine el grado de similaridad de KPIs entre estos dos artistas. Esta prueba T de Student la desarrollaremos más adelante y su conclusión fue que no hay diferencia significativa. \\
+\vspace{5mm}
+En la gráfica 13 podemos ver un diagrama de dispersión entre nuestro KPI y la cantidad de
+comentarios de cada publicación.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.003, y=60, s='Gráfica 13')
+plt.title('Aunque la correlación es positiva (0.38), es débil',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle('KPI vs Comentarios',
+             ha='left', x=0.047, y=0.97)
+plt.scatter(x=norteno['KPI'],
+            y=norteno['Comentarios'],
+            color=juan_colors[0])
+plt.xlabel('KPI: Likes / Seguidores')
+plt.ylabel('Comentarios')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 14 encontramos otro diagrama de dispersión entre nuestro KPI y la cantidad de
+palabras en el caption. Decidimos incluir dos promedios, uno general de valor 30.28; y otro
+secundario del promedio de publicaciones con KPI mayor a 0.01 (los de mejor desempeño) y nos
+damos cuenta que su valor es menor, 26.67 palabras en la descripción.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Mejores KPIS
+best_kpi = norteno[norteno['KPI'] >= 0.0100]['Palabras en Caption'].mean()
+
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.0031, y=117, s='Gráfica 14')
+plt.title('El mejor KPI se consigue con una cantidad de palabras \nligeramente menor al promedio',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'KPI vs Cantidad de palabras en el caption con promedio',
+    ha='left', x=0.047, y=0.97)
+plt.scatter(x=norteno['KPI'],
+            y=norteno['Palabras en Caption'],
+            color=juan_colors[0])
+plt.axhline(y=norteno['Palabras en Caption'].mean(),
+            color=juan_colors[4])
+plt.text(x=0.0175,
+         y=norteno['Palabras en Caption'].mean() + 2,
+         s=f"Promedio: {norteno['Palabras en Caption'].mean():.2f}",
+         color=juan_colors[4])
+plt.axhline(y=best_kpi,
+            color=juan_colors[1],
+            xmin=0.5,
+            xmax=1)
+plt.text(x=0.0125,
+         y=best_kpi - 5,
+         s=f"Promedio de KPI superior a 0.01: {best_kpi:.2f}",
+         color=juan_colors[1])
+plt.ylabel('Cantidad de palabras en el Caption')
+plt.xlabel('KPI: Likes / Seguidores')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 15 encontramos el diagrama de dispersión de nuestro KPI (número de likes dividido entre el número de seguidores del perfil) y la cantidad de hashtags por cada publicación. En este caso, aunque encontramos una relación negativa, que nos llevaría a pensar que el mejor rendimiento se da en las publicaciones con menor número de hashtags, la relación es muy débil para concluirlo.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.0031, y=36.2, s='Gráfica 15')
+plt.title('Aquí se demuestra la relación débil negativa del -0.19',
+          weight='bold', size=22,
+          x=-0.1, y=1.13, color=juan_colors[0],
+          loc='left')
+plt.suptitle('KPI vs Cantidad de hashtags',
+             ha='left', x=0.047, y=0.94)
+plt.scatter(x=norteno['KPI'],
+            y=norteno['Número de hashtags'],
+            color=juan_colors[0])
+plt.axhline(y=norteno['Número de hashtags'].mean(),
+            color=juan_colors[4])
+plt.text(x=0.0175,
+         y=norteno['Número de hashtags'].mean() + 1,
+         s=f"Promedio: {norteno['Número de hashtags'].mean():.2f}",
+         color=juan_colors[4])
+plt.ylabel('Cantidad de Hashtags en el Caption')
+plt.xlabel('KPI: Likes / Seguidores')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Otra relación muy débil y positiva encontramos en el diagrama de dispersión de la gráfica 16 entre la cantidad de comentarios por publicación y la cantidad de palabras en la descripción de las publicaciones. Es decir, hay una relación muy débil en que a mayor cantidad de palabras del caption, hay mayor cantidad de comentarios en las publicaciones, pero no es lo suficientemente fuerte para concluirlo.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-6.7, y=108, s='Gráfica 16')
+plt.title('Aquí se demuestra la relación débil positiva del 0.17',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Comentarios vs Cantidad de palabras en el caption',
+             ha='left', x=0.047, y=0.97)
+plt.scatter(x=norteno['Comentarios'],
+            y=norteno['Palabras en Caption'],
+            color=juan_colors[0])
+plt.ylabel('Cantidad de Palabras en el caption')
+plt.xlabel('Número de comentarios')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Y la última relación débil que estudiaremos la encontramos en la gráfica 17 en el diagrama de
+dispersión entre el número de comentarios y el número de hashtags de cada publicación. Aquí es
+negativa, igual débil, pero no tan débil como las anteriores. Es decir, a mayor número de hashtags en la descripción de la publicación, hay menor número de comentarios, sin embargo, es una relación aún débil.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-6.5, y=37, s='Gráfica 17')
+plt.title('Aquí se demuestra la relación débil negativa del -0.21',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Comentarios vs Número de hashtags',
+             ha='left', x=0.047, y=0.97)
+plt.scatter(x=norteno['Comentarios'],
+            y=norteno['Número de hashtags'],
+            color=juan_colors[0])
+plt.ylabel('Cantidad de Hashtags en el Caption')
+plt.xlabel('Número de comentarios')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Ahora, en la gráfica 18 mostramos la distribución de KPIs (Likes dividido entre seguidores) por cada tipo de contenido, allí se observa claramente que el tipo Carrusel y Reel tienen un KPI promedio muy similar hacia los 0.0052. Llama la atención que únicamente se cuenten con tres tipos de contenido, donde la Foto única es la que peor desempeño tiene.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Listar tipos de contenido y KPIs
+tipos_de_contenido = norteno['Tipo'].unique()
+KPIs_por_tipo = [norteno[norteno['Tipo'] == tipo]['KPI']
+                 for tipo in tipos_de_contenido]
+
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=0.2, y=0.03, s='Gráfica 18')
+plt.title(
+    'Distribución de KPI por Tipo de contenido con mediana de \ntipo Reels',
+    weight='bold', size=22,
+    x=-0.1, y=1.17, color=juan_colors[0],
+    loc='left')
+plt.suptitle('El peor KPI se obtiene con contenido Foto',
+             ha='left', x=0.047, y=0.97)
+plt.boxplot(KPIs_por_tipo, labels=tipos_de_contenido,
+            notch=True, patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.axhline(y=KPIs_por_tipo[0].median(),
+            color=juan_colors[4])
+plt.text(x=2.3, y=KPIs_por_tipo[0].median() + 0.0005,
+         s=f'Mediana de Reels: {KPIs_por_tipo[0].median():.4f}',
+         color=juan_colors[4])
+plt.xticks(rotation=0)
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+plt.xlabel('Tipo de Contenido')
+plt.ylabel('KPI')
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 19 mostramos un mapa de calor en el que se encuentran todas las horas de la semana y en cada recuadro, el tipo de contenido único que mejor funciona a esa hora. Es importante mencionar que, claramente, debido a la información de la gráfica 18, los recuadros de Foto terminan, a su vez, siendo recuadros con bajo desempeño, por lo que podrían ignorarse junto a los cuadros nulos.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Crear columnas de día de la semana y de hora del día
+norteno['Día de la Semana'] = norteno['Fecha y Hora'].dt.dayofweek
+norteno['Hora del día'] = norteno['Fecha y Hora'].dt.hour
+
+# Hacer matriz del tipo de contenido
+heatmap_tipo = norteno.pivot_table(index='Día de la Semana',
+                                   columns='Hora del día',
+                                   values='Tipo',
+                                   aggfunc='max',
+                                   fill_value='N/A') \
+    .reindex(columns=range(24), fill_value='N/A')
+
+# Graficar el mapa de calor
+colors = {'Reel': juan_colors[0],
+          'Carrusel': juan_colors[1], 'Foto': juan_colors[2]}
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-2.4, y=-2.4, s='Gráfica 19')
+plt.title('La tarde es el mejor horario para el contenido',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Mapa de calor de tipo de contenido principal por hora de la semana',
+    ha='left', x=0.047, y=0.99)
+for i in range(heatmap_tipo.shape[0]):
+    for j in range(heatmap_tipo.shape[1]):
+        tipo = heatmap_tipo.iloc[i, j]
+        color = colors.get(tipo, juan_colors[3])
+        ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=True, color=color))
+        ax.text(j + 0.5, i + 0.5, str(tipo), ha='center',
+                va='center', fontsize=7, color='white')
+ax.set_xticks(np.arange(0.5, 24, 1))
+ax.set_yticks(np.arange(0.5, len(heatmap_tipo.index), 1))
+ax.set_xticklabels(range(24))
+ax.set_yticklabels(['Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado',
+                    'Domingo'])
+plt.xlabel('Hora del Día')
+ax.set_xlim(0, 24)
+ax.set_ylim(0, len(heatmap_tipo.index))
+plt.gca().invert_yaxis()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Y finalmente, mostramos en la gráfica 20 el desempeño en porcentaje de nuestro KPI a lo largo
+de las horas de la semana. Los cuadros que se identifican con un 0\% son, debido, a la falta de
+información, a esas horas no se ha publicado contenido. Sin embargo, el mapa de calor nos deja
+ver claramente el patrón de desempeño semanal de las publicaciones en el género norteño colombiano. \\
+\vspace{15mm}
+En este mapa podemos destacar que el contenido desde las 10 p.m, hasta las 6 a.m., cualquier día, es inexistente, más, por el desarrollo del contenido alrededor, no parecen horas significativas para publicar. Aunque se sugiere hacer pruebas en esos horarios. \\
+\vspace{5mm}
+Respecto a las publicaciones realizadas, el pico más alto de desempeño de nuestro KPI lo encontramos el día miércoles con publicaciones de las 17 y las 18 horas, aunque vale la pena mencionar que estas son horas importantes que se mantienen a lo largo de todos los días de la semana. \\
+\vspace{5mm}
+A su vez, podemos observar un desempeño importante en las mañanas entre las 8 y las 10 a.m. principalmente desde el día jueves hasta el domingo.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Hacer matriz del tipo de contenido
+heatmap_kpi = norteno.pivot_table(index='Día de la Semana',
+                                  columns='Hora del día',
+                                  values='KPI',
+                                  aggfunc='mean',
+                                  fill_value=0) \
+    .reindex(columns=range(24), fill_value=0)
+
+# Normalizar los valores de KPI a porcentajes
+heatmap_kpi = (heatmap_kpi / heatmap_kpi.max().max()) * 100
+
+# Crear la figura y los ejes
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-3, y=-2.5, s='Gráfica 20')
+plt.title(
+    'El mejor horario es el miércoles al comenzar la noche',
+    weight='bold', size=22,
+    x=-0.13, y=1.18, color=juan_colors[0],
+    loc='left')
+plt.suptitle('Mapa de calor de KPI por hora de la semana',
+             ha='left', x=0.047, y=0.97)
+cmap = juan_cmap
+
+for i in range(heatmap_kpi.shape[0]):
+    for j in range(heatmap_kpi.shape[1]):
+        kpi_value = heatmap_kpi.iloc[i, j]
+        norm_value = kpi_value / heatmap_kpi.values.max()
+        color = cmap(norm_value)
+        ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=True, color=color))
+        ax.text(j + 0.5, i + 0.5, f"{kpi_value:.0f}%",
+                ha='center', va='center', fontsize=7, color='white')
+
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=100))
+fig.colorbar(sm, ax=ax)
+ax.set_xticks(np.arange(0.5, 24, 1))
+ax.set_yticks(np.arange(0.5, len(heatmap_kpi.index), 1))
+ax.set_xticklabels(range(24), rotation=0)
+ax.set_yticklabels(['Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado',
+                    'Domingo'])
+plt.xlabel('Hora del Día')
+ax.set_xlim(0, 24)
+ax.set_ylim(0, len(heatmap_kpi.index))
+plt.gca().invert_yaxis()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Prueba estadística de KPI} \\
+Como lo mencionamos anteriormente, hemos encontrado que el perfil de Los Hermanos Ariza Show tiene las publicaciones con el mejor desempeño en nuestro KPI, resultado de la división del número de likes de la publicación sobre el número de seguidores del perfil. Nos parece importante poder identificar si hay diferencias estadísticas significativas entre este perfil con los perfiles de los otros artistas del género que analizamos. \\
+\vspace{5mm}
+Comenzaremos fijando nuestro nivel de significancia estadística en 0.05 y determinando como hipótesis nula la siguiente: No hay diferencia en el desempeño de nuestro KPI entre las publicaciones de las 4 cuentas analizadas. Luego, aplicamos la prueba de Levene para poder determinar la igualdad en las varianzas del KPI de las publicaciones de los diferentes perfiles. El resultado de esta prueba, nos arrojó un valor P de 0.00149999, que es menor a nuestro nivel de significancia estadística del 0.05. Por lo que podemos descartar la hipótesis nula de la Prueba de Levene y decir que los perfiles tienen varianzas
+diferentes. \\
+\vspace{5mm}
+Por tanto, aplicaremos una Prueba T de Student de par en par con Los Hermanos Ariza Show hacia los otros perfiles con varianza desigual. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Los Hermanos Ariza Show y Uriel Henao es de 0.05002, mayor que nuestro nivel de significancia estadística. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Los Hermanos Ariza Show y Grupo Dominio es de 0.00296, menor que nuestro nivel de significancia estadística. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Los Hermanos Ariza Show y Los 5 del Norte es de 0.00007, menor que nuestro nivel de significancia estadística. \\
+\vspace{5mm}
+Esto nos dice que, no podemos rechazar la hipótesis nula entre Los Hermanos Ariza Show y Uriel Henao y tal como lo vemos en la gráfica 21, nos damos cuenta que no hay una diferencia estadística significativa en el desempeño de nuestro KPI en estos dos perfiles.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Graficar los KPIs de nuestros referentes
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.0022, y=136, s='Gráfica 21')
+plt.title('No hay diferencias significativas en los KPIs de Los Hermanos \nAriza Show y Uriel Henao',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Curva KDE de KPI por Artista',
+    ha='left', x=0.047, y=0.97)
+likes_por_artista[0].plot.kde(color=juan_colors[0],
+                              label='Los Hermanos Ariza Show')
+likes_por_artista[1].plot.kde(color=juan_colors[5],
+                              label='Uriel Henao')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+plt.xlabel('KPI: Likes / Seguidores')
+plt.ylabel('Densidad')
+plt.xlim((0, 0.022))
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.legend()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Comparación con el Género Popular Colombiano y el Género Norteño Mexicano} \\
+Vamos a concatenar nuestros dos archivos Comma-Separated Values de referencia para estudiar las posibles oportunidades que tiene nuestro género norteño mexicano respecto a otros dos géneros cercanos comercialmente. \\
+\vspace{5mm}
+En la gráfica 22 podemos evidenciar que la estrategia de priorizar los Reels sobre cualquier otro tipo de contenido se mantiene. En el caso de Luis Alfonso, el 81.8\% de su contenido son Reels, mientras el 18.2\% son Fotos individuales y no maneja otros tipos de contenido. \\
+\vspace{5mm}
+Por otra parte, el Grupo Intocable tiene sólo el 30\% de su contenido en Reels, es muy fuerte en Fotos Individuales con el 55\%, mientras el 15\% restante son Carruseles. Bobby Pulido, tiene 66.7\%, 16.7\% y 16.7\% en Reels, Fotos individuales y Carruseles, respectivamente. \\
+\vspace{5mm}
+Por nuestro análisis anterior, recomendamos dejar de lado el tipo de contenido de Fotos individuales para nuestro género. \\
+\vspace{5mm}
+Por razones que detallaremos más adelante, será importante concentrarnos en estos tres artistas: Luis Alfonso por el Género Popular Colombiano y Grupo Intocable y Bobby Pulido por el Género Norteño Mexicano.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Concatenar los dataframes de referencia
+referencias = pd.concat([popular, mexico])
+
+# Contar tipo de contenido por artista
+type_of_content = referencias.pivot_table(index='Artista',
+                                          columns='Tipo',
+                                          values='Fecha y Hora',
+                                          aggfunc='count',
+                                          fill_value=0)
+
+# Normalizar los datos para que sumen 100 por cada artista
+type_of_content = type_of_content.div(
+    type_of_content.sum(axis=1), axis=0) * 100
+
+# Crear el gráfico de barras apiladas
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-23.5, y=10.5,
+         s='Gráfica 22')
+plt.title('El tipo de contenido principal son los Reels, de nuevo',
+          weight='bold', size=22,
+          x=-0.225, y=1.2, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución porcentual del tipo de contenido por artista',
+             ha='left', x=-0.05, y=1)
+type_of_content.plot(kind='barh', stacked=True,
+                     ax=ax, color=[juan_colors[4],
+                                   juan_colors[2],
+                                   juan_colors[0],
+                                   juan_colors[5]])
+ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+ax.set_ylabel('')
+ax.set_xticks([])
+for i in range(type_of_content.shape[0]):
+    cumulative_sum = 0
+    for j, tipo in enumerate(type_of_content.columns):
+        value = type_of_content.iloc[i, j]
+        if value > 5:
+            ax.text(x=cumulative_sum + value / 2, y=i,
+                    s=f'{value:.1f}%', ha='center', va='center',
+                    color='white', fontsize=10)
+        cumulative_sum += value
+ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En general, el 56.73\% de publicaciones de nuestros referentes, son Reels; seguido del 23.40\% que son Fotos Individuales; 19.14\% que son Carruseles y sólo un 0.70\% que son Videos. \\
+\vspace{5mm}
+En cuanto al número de hashtags, nuestros artistas referentes no suelen usarlos en sus publicaciones, o los usan mucho menos que en nuestro género que la mediana por publicación es 4 hashtags. En el caso de nuestros referentes, las publicaciones con 4 hashtags representan el 2.83\%; mientras las publicaciones sin hashtags suman el 48.22\%. Luego encontramos las publicaciones con 1 (13.47\%) y 2 hashtags (9.92\%). \\
+\vspace{5mm}
+Después, encontramos la distribución de nuestro KPI de la cantidad de likes dividido entre la cantidad de seguidores de la cuenta en la gráfica 23. De esta, podemos concluir que Luis Alfonso en el caso del Género Popular Colombiano y Bobby Pulido, para el Género Norteño Mexicano, son los perfiles con mayor promedio en nuestro KPI, de 0.009453 y 0.008284, respectivamente.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Agrupar los 'Likes' por 'Artista'
+artistas = referencias['Artista'].unique()
+likes_por_artista = [referencias[referencias['Artista']
+                                 == artista]['KPI'] for artista in artistas]
+
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.302, y=0.028, s='Gráfica 23')
+plt.title('Luis Alfonso y Bobby Pulido tienen los mejores KPIs',
+          weight='bold', size=22,
+          x=-0.101, y=1.14, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Distribución de KPI por Artista',
+    ha='left', x=0.047, y=0.96)
+plt.boxplot(likes_por_artista, labels=artistas,
+            notch=True, patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.xticks(rotation=10)
+ax.set_xticklabels(artistas, size=8,
+                   rotation=0)
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Encontramos diferentes correlaciones entre las columnas numéricas:
+\begin{itemize}[noitemsep]
+  \item Una correlación positiva, con fuerza media, con un valor de 0.4547, entre el número de seguidores y el número de likes por publicación, lo que brinda de mayor fuerza a nuestro KPI y es consecuente con nuestro análisis anterior.
+  \item Una correlación positiva, con fuerza media-baja, con un valor de 0.3673, entre el número de seguidores y la cantidad de comentarios por publicación, es decir, que en el caso de nuestro artistas referentes, a medida que aumenta el número de seguidores, aumenta el número de comentarios por publicación.
+  \item Las dos correlaciones anteriores nos llevan a una tercera positiva, de fuerza media-baja, con un valor de 0.3196, justamente entre el número de comentarios y el número de likes por publicación.
+  \item Y, finalmente, como lo vemos en la gráfica 24, una correlación positiva, muy débil, con un valor de 0.1433, entre nuestro KPI y el número de palabras en el caption. Podemos decir que, aunque si hay una correlación, es muy débil para poder concluir que el mayor desempeño en nuestro KPI se logra cuando la cantidad de palabras en la descripción de la publicación aumenta.
+\end{itemize}
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.0033, y=180, s='Gráfica 24', fontsize=12)
+plt.title('No se ve relación entre la cantidad de palabras del caption \ny el rendimiento',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'KPI vs Cantidad de palabras en el caption con promedio',
+    ha='left', x=0.047, y=0.97)
+plt.scatter(x=referencias['KPI'],
+            y=referencias['Palabras en Caption'],
+            color=juan_colors[0])
+plt.axhline(y=referencias['Palabras en Caption'].mean(),
+            color=juan_colors[4])
+plt.text(x=0.0175,
+         y=referencias['Palabras en Caption'].mean() + 2,
+         s=f"Promedio: {referencias['Palabras en Caption'].mean():.2f}",
+         color=juan_colors[4])
+plt.ylabel('Cantidad de palabras en el caption')
+plt.xlabel('KPI')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En ese mismo sentido, en la gráfica 25 evaluamos el desempeño de nuestro KPI en los diferentes tipos de contenido. El promedio más alto lo tiene el Carrusel, seguido de las Fotos Individuales, los Reels, y, muy lejos de los demás, los videos. \\
+\vspace{5mm}
+También podemos ver fácilmente, cómo los Reels son el tipo de contenido con mayor cantidad de valores atípicos de desempeño en nuestro KPI.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Listar tipos de contenido y KPIs
+tipos_de_contenido = referencias['Tipo'].unique()
+KPIs_por_tipo = [referencias[referencias['Tipo'] == tipo]['KPI']
+                 for tipo in tipos_de_contenido]
+
+# Configurar la figura y graficar los boxplots
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=0.1, y=0.029, s='Gráfica 25', fontsize=12)
+plt.title('El peor KPI se obtiene con contenido de Video',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Distribución de KPI por Tipo de contenido con mediana de tipo Reels',
+             ha='left', x=0.047, y=0.97)
+plt.boxplot(KPIs_por_tipo, labels=tipos_de_contenido,
+            notch=True, patch_artist=True,
+            boxprops=dict(facecolor=juan_colors[2], color=juan_colors[0]),
+            whiskerprops=dict(color=juan_colors[0]),
+            capprops=dict(color=juan_colors[0]),
+            medianprops=dict(color=juan_colors[0]),
+            flierprops=dict(color=juan_colors[0]),
+            zorder=2)
+plt.axhline(y=KPIs_por_tipo[0].median(),
+            color=juan_colors[4])
+plt.text(x=3.3, y=KPIs_por_tipo[0].median() + 0.0005,
+         s=f'Mediana de Carrusel: {KPIs_por_tipo[0].median():.4f}',
+         color=juan_colors[4])
+plt.xticks(rotation=0)
+plt.xlabel('Tipo de Contenido')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 26 se puede ver cómo, a pesar de ser la misma cantidad de contenidos, se han probado horarios diferentes, por lo que se tiene un rango más amplio de datos sobre el desempeño de cada tipo de contenido. \\
+\vspace{5mm}
+Llama la atención además, que en el caso de nuestros referentes, han probado más contenido en las madrugadas de jueves a domingo que en el caso del género norteño colombiano.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Modificar el tipo de columna
+referencias['Fecha y Hora'] = pd.to_datetime(
+    referencias['Fecha y Hora'], utc=True)
+referencias['Fecha y Hora'] = referencias['Fecha y Hora'].dt.tz_convert(
+    'America/Bogota')
+
+# Crear columnas de día de la semana y de hora del día
+referencias['Día de la Semana'] = referencias['Fecha y Hora'].dt.dayofweek
+referencias['Hora del día'] = referencias['Fecha y Hora'].dt.hour
+
+# Hacer matriz del tipo de contenido
+heatmap_tipo = referencias.pivot_table(index='Día de la Semana',
+                                       columns='Hora del día',
+                                       values='Tipo',
+                                       aggfunc='max',
+                                       fill_value='N/A') \
+    .reindex(columns=range(24), fill_value='N/A')
+
+# Graficar el mapa de calor
+colors = {'Reel': juan_colors[0],
+          'Carrusel': juan_colors[1], 'Foto': juan_colors[2]}
+fig, ax = plt.subplots(figsize=(12, 4))
+for i in range(heatmap_tipo.shape[0]):
+    for j in range(heatmap_tipo.shape[1]):
+        tipo = heatmap_tipo.iloc[i, j]
+        color = colors.get(tipo, juan_colors[3])
+        ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=True, color=color))
+        ax.text(j + 0.5, i + 0.5, str(tipo), ha='center',
+                va='center', fontsize=7, color='white')
+
+plt.text(x=-2.3, y=-2.9, s='Gráfica 26', fontsize=12)
+plt.title('Hay mucha más disponibilidad de horas que en el género \nnorteño colombiano',
+          weight='bold', size=22,
+          x=-0.1, y=1.15, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Mapa de calor de mejor Tipo de contenido por Hora de la semana',
+    ha='left', x=0.047, y=0.97)
+ax.set_xticks(np.arange(0.5, 24, 1))
+ax.set_yticks(np.arange(0.5, len(heatmap_tipo.index), 1))
+ax.set_xticklabels(range(24))
+ax.set_yticklabels(['Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado',
+                    'Domingo'])
+plt.xlabel('Hora del Día')
+ax.set_xlim(0, 24)
+ax.set_ylim(0, len(heatmap_tipo.index))
+plt.gca().invert_yaxis()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Esta gráfica conserva una relación directa con el mapa de calor del porcentaje de nuestro KPI en todas las horas de la semana que presentamos en la gráfica 27. En esta nos podemos dar cuenta que, a pesar que se han probado publicaciones en las madrugadas de jueves a domingo, realmente es la madrugada del sábado y del domingo las que tienen resultados efectivos. \\
+\vspace{5mm}
+También es importante mencionar que la franja de la tarde-noche es mucho más amplia que en nuestro género, pues esta comienza a las 3 p.m. y se extiende hasta las 10 p.m. También hay una franja importante en las mañanas, un poco más tarde que la de nuestro género, entre las 9 y las 11 a.m. \\
+\vspace{5mm}
+Las franjas más importantes de nuestros referentes están en la mañana del viernes y la tarde del domingo.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Hacer matriz del tipo de contenido
+heatmap_kpi = referencias.pivot_table(index='Día de la Semana',
+                                      columns='Hora del día',
+                                      values='KPI',
+                                      aggfunc='mean',
+                                      fill_value=0) \
+    .reindex(columns=range(24), fill_value=0)
+
+# Normalizar los valores de KPI a porcentajes
+heatmap_kpi = (heatmap_kpi / heatmap_kpi.max().max()) * 100
+
+# Crear la figura y los ejes
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-3, y=-2.2, s='Gráfica 27', fontsize=12)
+plt.title(
+    'El contenido les funciona muy bien los fines de semana',
+    weight='bold', size=22,
+    x=-0.13, y=1.15, color=juan_colors[0],
+    loc='left')
+plt.suptitle('Mapa de calor de procentaje de KPI por hora de la semana',
+             ha='left', x=0.047, y=0.97)
+cmap = juan_cmap
+for i in range(heatmap_kpi.shape[0]):  # Filas (Días de la Semana)
+    for j in range(heatmap_kpi.shape[1]):  # Columnas (Horas del Día)
+        kpi_value = heatmap_kpi.iloc[i, j]
+        norm_value = kpi_value / heatmap_kpi.values.max()
+        color = cmap(norm_value)
+        ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=True, color=color))
+        ax.text(j + 0.5, i + 0.5, f"{kpi_value:.0f}%",
+                ha='center', va='center', fontsize=7, color='white')
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=100))
+fig.colorbar(sm, ax=ax)
+ax.set_xticks(np.arange(0.5, 24, 1))
+ax.set_yticks(np.arange(0.5, len(heatmap_kpi.index), 1))
+ax.set_xticklabels(range(24), rotation=0)
+ax.set_yticklabels(['Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado',
+                    'Domingo'])
+plt.xlabel('Hora del Día')
+ax.set_xlim(0, 24)
+ax.set_ylim(0, len(heatmap_kpi.index))
+plt.gca().invert_yaxis()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Prueba estadística de referentes} \\
+Como ya lo vimos en la gráfica 23, Luis Alfonso y Bobby Pulido son las mejores cuentas en desempeño de nuestro KPI en las últimas 20 publicaciones. Ahora, nos interesa demostrar que los KPIs de los otros artistas son significativamente diferentes como para dejarlos de lado. \\
+\vspace{5mm}
+Al igual que lo hicimos con la prueba anterior, fijaremos nuestro nivel de significancia estadística en 0.05 y comenzaremos aplicando la Prueba de Levene para encontrar diferencias en las varianzas de los datos. \\
+\vspace{5mm}
+La Prueba de Levene nos arrojó un valor P en el caso de los artistas de Música Popular Colombiana de 0.002704 que es menor que 0.05, nuestro nivel de significancia estadística, es decir, de nuevo, nos encontramos en un escenario de varianzas difererentes. \\
+\vspace{5mm}
+Respecto a los perfiles de los artistas de Música Norteña Mexicana, el valor P de la Prueba de Levene fue de 0.0003272, mucho menor que 0.05, de nuevo, varianzas diferentes. \\
+\vspace{5mm}
+Así que decidimos hacer una Prueba T de Student par a par con Luis Alfonso, Bobby Pulido y los diferentes artistas, de cada género específico. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Luis Alfonso y Pipe Bueno es de 0.0314, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Luis Alfonso y Jessi Uribe es de 0.0018, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Luis Alfonso y Yeison Jiménez es de 0.0072, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+Es decir, Luis Alfonso es el artista con mejor desempeño en nuestro KPI, muy por encima de los otros artistas del Género Popular Colombiano. \\
+\vspace{5mm}
+Por otra parte, el valor P de la Prueba T de Student entre Bobby Pulido y Los Tigres del Norte es de 0.0410, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Bobby Pulido y Los Tigres del Norte es de 0.0410, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Bobby Pulido y Grupo Intocable es de 0.1234, mayor que 0.05, no hay diferencia significativa. \\
+\vspace{5mm}
+El valor P de la Prueba T de Student entre Bobby Pulido y Los Tucanes de Tijuana es de 0.0078, menor que 0.05, hay diferencia significativa. \\
+\vspace{5mm}
+Por tanto, en el caso de los artistas del Género Norteño Mexicano, si encontramos que además de Bobby Pulido, el Grupo Intocable tiene un desempeño muy parecido en términos de nuestro KPI como se observa en el curva KDE de la gráfica 28.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Separar los KPIs por artista
+kpis_por_artista = {}
+for artist in referencias['Artista'].unique():
+    kpis_por_artista[artist] = referencias[referencias['Artista']
+                                           == artist]['KPI'].values
+
+# Graficar los KPIs de nuestros referentes
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-0.0024, y=190, s='Gráfica 28')
+plt.title('No hay diferencias significativas en los KPIs de Bobby Pulido \ny el Grupo Intocable',
+          weight='bold', size=22,
+          x=-0.1, y=1.17, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Curva KDE de KPI por Artista',
+    ha='left', x=0.047, y=0.97)
+pd.Series(kpis_por_artista['Bobby Pulido']) \
+    .plot.kde(color=juan_colors[0],
+              label='Bobby Pulido')
+pd.Series(kpis_por_artista['Grupo Intocable']) \
+    .plot.kde(color=juan_colors[5],
+              label='Grupo Intocable')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+plt.xlabel('KPI: Likes / Seguidores')
+plt.xlim((0, 0.025))
+plt.ylabel('Densidad')
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.legend()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Publicaciones virales} \\
+Finalmente, trabajaremos con el conjunto de datos filtrado con un valor de KPI atípico. Buscamos razones que nos permitan identificar las razones de su viralidad, entendiendo que en todo caso, se tratan de publicaciones atípicas. \\
+\vspace{5mm}
+Comenzamos analizando, como se observa en la gráfica 29, los tipos de contenido más propensos a ser virales tanto con los artistas de género norteño colombiano, como para los artistas referentes. \\
+\vspace{5mm}
+Allí se observa claramente que el contenido con mayor probabilidad de ser viral es el tipo Reel, seguido de los Carruseles y por último, como sucedió con el análisis de nuestro género, las Fotos.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Encontrar tipos de contenido virales
+top_type_viral = viral['Tipo'] \
+    .value_counts() \
+    .sort_values(ascending=False)
+
+# Crear el gráfico de barras apiladas
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-0.66, y=18,
+         s='Gráfica 29')
+plt.title('El tipo de contenido más viral es el reel y el carrusel',
+          weight='bold', size=22,
+          x=-0.04, y=1.15, color=juan_colors[0],
+          loc='left')
+plt.suptitle('Recuento de tipo de contenido viral',
+             ha='left', x=0.093, y=0.97)
+plt.bar(x=top_type_viral.index,
+        height=top_type_viral,
+        color=juan_colors[0],
+        zorder=2)
+plt.xlabel('Tipo de Contenido')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En el caso de las publicaciones virales encontramos una Correlación de Pearson de 0.96 entre el número de seguidores y la cantidad de likes de la publicación como se observa en la gráfica 30. Es una correlación positiva y es muy fuerte. \\
+\vspace{5mm}
+Lo que es claro a partir de esto es que la cantidad de likes de una publicación viral va a estar muy correlacionada con el número de seguidores de la cuenta, es decir, no tendrá la misma cantidad de likes una publicación viral de un perfil con un gran número de seguidores que uno con pocos.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Hacer diagrama de dispersión
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=-1570000, y=500000, s='Gráfica 30', fontsize=12)
+plt.title('Hay una correlación muy fuerte, positiva, de 0.96 en las \npublicaciones virales',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'Número de seguidores vs Likes en publicaciones virales',
+    ha='left', x=0.047, y=0.99)
+plt.scatter(x=viral['Seguidores'],
+            y=viral['Likes'],
+            color=juan_colors[0])
+plt.ylabel('Cantidad de likes')
+plt.xlabel('Número de seguidores')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+En la gráfica 31 podemos observar que, primero, el promedio de número de palabras en la descripción de las publicaciones virales es ligeramente más alto, pues en el análisis de nuestro género era 26 palabras, en estas publicaciones es 29.38 palabras por publicación. También se observa que, con un coeficiente de Correlación de Pearson de -0.03, hay una relación negativa muy, muy débil entre nuestro KPI y la cantidad de palabras en la descripción, por lo que no es convenientente hacer ningún tipo de conclusión.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Hacer diagrama de dispersión
+fig, ax = plt.subplots(figsize=[12, 4])
+plt.text(x=0.0065, y=120, s='Gráfica 31', fontsize=12)
+plt.title('No hay correlación de los post virales entre nuestro KPI y \nla cantidad de palabras',
+          weight='bold', size=22,
+          x=-0.1, y=1.18, color=juan_colors[0],
+          loc='left')
+plt.suptitle(
+    'KPI vs Cantidad de palabras en el caption con promedio',
+    ha='left', x=0.047, y=0.99)
+plt.scatter(x=viral['KPI'],
+            y=viral['Palabras en Caption'],
+            color=juan_colors[0])
+plt.axhline(y=viral['Palabras en Caption'].mean(),
+            color=juan_colors[4])
+plt.text(x=0.08,
+         y=viral['Palabras en Caption'].mean() + 2,
+         s=f"Promedio: {viral['Palabras en Caption'].mean():.2f}",
+         color=juan_colors[4])
+plt.ylabel('Cantidad de palabras en el caption')
+plt.xlabel('KPI')
+plt.grid(axis='y', alpha=0.7,
+         zorder=1)
+ax.spines[['top', 'right', 'left']].set_visible(False)
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+Ahora, respecto a los horarios de publicación de estas publicaciones virales que mostramos en la gráfica 32, podemos notar que respetan el mismo horario de nuestros referentes, por lo que aconsejamos que se pudiera evaluar estos horarios en los artistas del género norteño colombiano. \\
+\vspace{5mm}
+El elemento más interesante es que el día viernes no se ha viralizado ninguna publicación a ninguna hora.
+\end{multicols}
+\vspace{10mm}
+```{python}
+# | echo: false
+# Modificar el tipo de columna
+viral['Fecha y Hora'] = pd.to_datetime(viral['Fecha y Hora'], utc=True)
+viral['Fecha y Hora'] = viral['Fecha y Hora'].dt.tz_convert('America/Bogota')
+
+# Crear columnas de día de la semana y de hora del día
+viral['Día de la Semana'] = viral['Fecha y Hora'].dt.dayofweek
+viral['Hora del día'] = viral['Fecha y Hora'].dt.hour
+
+# Hacer matriz del tipo de contenido
+heatmap_kpi = viral.pivot_table(index='Día de la Semana',
+                                columns='Hora del día',
+                                values='KPI',
+                                aggfunc='mean',
+                                fill_value=0) \
+    .reindex(columns=range(24),
+             fill_value=0,
+             index=range(7))
+
+# Normalizar los valores de KPI a porcentajes
+heatmap_kpi = (heatmap_kpi / heatmap_kpi.max().max()) * 100
+
+# Crear la figura y los ejes
+fig, ax = plt.subplots(figsize=(12, 4))
+plt.text(x=-3.3, y=-3.3, s='Gráfica 32', fontsize=12)
+plt.title(
+    'Las publicaciones virales mantienen los horarios de \nnuestros referentes',
+    weight='bold', size=22,
+    x=-0.14, y=1.19, color=juan_colors[0],
+    loc='left')
+plt.suptitle('Mapa de calor de KPI por hora de la semana',
+             ha='left', x=0.04, y=1)
+cmap = juan_cmap
+for i in range(heatmap_kpi.shape[0]):  # Filas (Días de la Semana)
+    for j in range(heatmap_kpi.shape[1]):  # Columnas (Horas del Día)
+        kpi_value = heatmap_kpi.iloc[i, j]
+        norm_value = kpi_value / heatmap_kpi.values.max()  # Normalización
+        color = cmap(norm_value)  # Obtener el color del colormap
+        ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=True, color=color))
+        ax.text(j + 0.5, i + 0.5, f"{kpi_value:.0f}%",
+                ha='center', va='center', fontsize=7, color='white')
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=100))
+fig.colorbar(sm, ax=ax)
+ax.set_xticks(np.arange(0.5, 24, 1))
+ax.set_yticks(np.arange(0.5, len(heatmap_kpi.index), 1))
+ax.set_xticklabels(range(24), rotation=0)
+ax.set_yticklabels(['Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado',
+                    'Domingo'])
+plt.xlabel('Hora del Día')
+ax.set_xlim(0, 24)
+ax.set_ylim(0, len(heatmap_kpi.index))
+plt.gca().invert_yaxis()
+plt.show()
+```
+\vspace{10mm}
+\begin{multicols}{2}
+\fontsize{9}{15}\selectfont
+\textbf{\fontsize{11}{13}\selectfont Conclusiones} \\
+A partir de cada aspecto analizado tanto en las útlimas 20 publicaciones de los artistas más representativos del género norteño colombiano como en ese mismo número de publicaciones en Instagram de 4 artistas del género popular colombiano y 4 artistas del género norteño mexicano podemos asegurar que:
+\begin{itemize}[noitemsep]
+  \item A pesar de tratarse de un mismo género, tenemos desempeños muy diferentes en cada uno de los perfiles en relación a los likes. Aunque tenemos una media de 221.31, tenemos una desviación estándar de 191.89. 
+  \item Hay un Correlación de Pearson de 0.5483 entre el número de seguidores y el número de likes, razón por la que se creó un KPI para la evaluación de KPI = likes / seguidores.
+  \item El promedio de nuestro KPI, el número de likes dividido entre el número de seguidores, del género norteño colombiano es de 0.004974. Y la mediana de likes por publicación es de 195.5. 
+  \item El perfil con mejor desempeño en nuestro KPI, en general, es Los Hermanos Ariza Show, seguido de Uriel Henao, cuyos KPIs no tienen diferencia estadística significativa, se deberían tener en cuenta ambos en el análisis.
+  \item La mediana de comentarios por publicación es de 4. Es decir, los seguidores del género no acostumbran a comentar.
+  \item El intervalo intercuartílico de la cantidad de palabras por publicación es desde 18.75 a 35 palabras incluyendo los hashtags, con una media de 30.28. Este valor se disminuye en poco (26.67) en las publicaciones con más alto KPI. Mientras la mediana de hashtags es de 4 hashtags por publicación.
+  \item El principal tipo de contenido en nuestro género son los Reels, seguido de carruseles. A la vez, estos son los tipos de contenido más virales. Las fotos individuales son el tipo de contenido que peor se desempeña.
+  \item El mejor horario para publicar son los días martes, jueves, viernes, sábados y domingos de 8 a 10 am. Mientras que los lunes, martes, miércoles, jueves, sábados y domingos en la tarde, el mejor horario es de 5 a 7 pm. El horario más importante del género es el miércoles de 5 a 6 pm.
+  \item Es importante que los artistas del género norteño colombiano prueben contenido en las madrugadas de jueves a domingo.
+  \item Nuestros artistas de referencia basan su estrategia en Reels en un 57.04\% de sus publicaciones. El 48.59\% de sus publicaciones no tienen hashtags. Los 4 artistas escogidos de música norteña mexicana tienen mejor desempeño en nuestro KPI que los artistas de música popular colombiana. El artista más destacado de música norteña mexicana es Bobby Pulido con un KPI promedio de 0.008284 y Grupo Intocable con uno de 0.005238, mientras el artista más destacado de música popular colombiana es Luis Alfono con un KPI promedio de 0.009453.
+  \item Las publicaciones de estos artistas referentes son ligeramente más tarde que las del género norteño colombiano con un gran desempeño los fines de semana, principalmente el domingo entre las 4 y las 8 pm.
+  \item El tipo de contenido que más se viraliza son los Reels y los Carruseles y sigue la misma programación que el contenido de nuestros referentes, será importante ponerlo a prueba con las cuentas del género norteño colombiano. El promedio de palabras del caption es ligeramente más alto que los de nuestro análisis del género norteño colombiano (30.28 palabras).
+\end{itemize}
+\end{multicols}
+\textcolor[HTML]{716d6b}{\fontsize{8}{25}\selectfont Copyright © 2024 Juan Ramos. Todos los derechos reservados.}
